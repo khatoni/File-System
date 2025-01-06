@@ -5,7 +5,7 @@ data FileSystemElement
 
 
 currentDirectory :: [String]
-currentDirectory = ["root", "first", "second", "third"]
+currentDirectory = ["root", "subdir1"]
 
 pwd :: [String] -> String
 pwd currentDirectory = concatMap (++ "/") (init currentDirectory) ++ last currentDirectory
@@ -53,6 +53,12 @@ getName :: FileSystemElement -> String
 getName (File name _) = name
 getName (Directory name _) = name
 
+getDirectoryContent :: Maybe FileSystemElement -> Maybe [String]
+getDirectoryContent Nothing = Nothing
+getDirectoryContent (Just (File name content)) = Nothing
+getDirectoryContent ( Just (Directory name children)) =Just (map getName children)
+
+
 getChild :: String -> [FileSystemElement] -> Maybe FileSystemElement
 getChild _ [] = Nothing
 getChild name (child:children)
@@ -74,7 +80,8 @@ root = Directory "root"
     , Directory "subdir1" 
         [ File "file2.txt" "Content of file 2"
         , File "file3.txt" "Content of file 3"
-        , Directory "subdir11" []
+        , Directory "subdir11" 
+        [File "file111.txt" "Content of file 1111"]
         ]
     , Directory "subdir2" []
 
@@ -110,3 +117,15 @@ root = Directory "root"
 -- Nothing
 -- >>> traverseFileSystem root ["root", "subdir1", "subdir11"]
 -- Just (Directory "subdir11" [])
+
+
+ls :: Maybe String -> Maybe [String]
+ls Nothing = getDirectoryContent (traverseFileSystem root currentDirectory)
+ls (Just path) = getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) []))
+-- >>> ls Nothing
+-- Just ["file2.txt","file3.txt","subdir11"]
+-- >>> ls (Just "..")
+-- Just ["file1.txt","subdir1","subdir2"]
+
+-- >>> ls (Just "/subdir1/subdir11")
+-- Just ["file111.txt"]
