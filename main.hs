@@ -1,3 +1,4 @@
+import System.IO (hFlush, stdout)
 
 data FileSystemElement
     = File String String | Directory String [FileSystemElement]
@@ -75,12 +76,12 @@ traverseFileSystem d@(Directory name children) (current:rest)
     | name == current && null rest  = Just d
     | otherwise                     = getChild (head rest) children >>= \child -> traverseFileSystem child rest
 
-root = Directory "root" 
+root = Directory "root"
     [ File "file1.txt" "Content of file 1"
-    , Directory "subdir1" 
+    , Directory "subdir1"
         [ File "file2.txt" "Content of file 2"
         , File "file3.txt" "Content of file 3"
-        , Directory "subdir11" 
+        , Directory "subdir11"
         [File "file111.txt" "Content of file 1111"]
         ]
     , Directory "subdir2" []
@@ -129,3 +130,24 @@ ls (Just path) = getDirectoryContent (traverseFileSystem root (parsePath (create
 
 -- >>> ls (Just "/subdir1/subdir11")
 -- Just ["file111.txt"]
+
+
+splitCommandToTokens:: String -> [String]
+splitCommandToTokens [] = []
+splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens ( dropWhile (== ' ') (dropWhile (/= ' ') command))
+
+-- >>> splitCommandToTokens "ls                  ../second/third/.."
+-- ["ls","../second/third/.."]
+
+-- >>> splitCommandToTokens "cat file1.txt /subdir1/subdir2/file2.txt file3.txt > file4.txt"
+-- ["cat","file1.txt","/subdir1/subdir2/file2.txt","file3.txt",">","file4.txt"]
+
+main :: IO ()
+main = commandExecutor root where
+    commandExecutor root = do
+        putStr "$ "
+        hFlush stdout
+        command  <- getLine
+        let commandTokens = splitCommandToTokens command
+        putStrLn $ head commandTokens
+        commandExecutor root
