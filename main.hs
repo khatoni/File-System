@@ -1,3 +1,4 @@
+
 data FileSystemElement
     = File String String | Directory String [FileSystemElement]
     deriving (Show, Eq)
@@ -46,3 +47,66 @@ parsePath path tmp
 
 -- >>> parsePath (createQueryPath "/tmp1/../../tmp2") []
 -- Invalid path
+
+
+getName :: FileSystemElement -> String
+getName (File name _) = name
+getName (Directory name _) = name
+
+getChild :: String -> [FileSystemElement] -> Maybe FileSystemElement
+getChild _ [] = Nothing
+getChild name (child:children)
+    | getName child == name  = Just child
+    | otherwise              = getChild name children
+
+traverseFileSystem:: FileSystemElement -> [String] -> Maybe FileSystemElement
+traverseFileSystem fileSystemElement [] = Nothing
+traverseFileSystem f@(File name content) (current:rest)
+    | name == current && null rest = Just f
+    | otherwise                    = Nothing
+
+traverseFileSystem d@(Directory name children) (current:rest)
+    | name == current && null rest  = Just d
+    | otherwise                     = getChild (head rest) children >>= \child -> traverseFileSystem child rest
+
+root = Directory "root" 
+    [ File "file1.txt" "Content of file 1"
+    , Directory "subdir1" 
+        [ File "file2.txt" "Content of file 2"
+        , File "file3.txt" "Content of file 3"
+        , Directory "subdir11" []
+        ]
+    , Directory "subdir2" []
+
+    ]
+
+-- >>> traverseFileSystem root ["root", "file1.txt"]
+-- Just (File "file1.txt" "Content of file 1")
+
+-- >>> traverseFileSystem root ["root", "file1.txt", "file2.txt"]
+-- Nothing
+
+-- >>> traverseFileSystem root ["root", "subdir2"]
+-- Just (Directory "subdir2" [])
+
+-- >>> traverseFileSystem root ["root", "subdir1"]
+-- Just (Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3"])
+
+-- >>> traverseFileSystem root ["root", "subdir3"]
+-- Nothing
+
+-- >>> traverseFileSystem root ["root", "subdir2", "subdir3"]
+-- Nothing
+
+-- >>> traverseFileSystem root ["root", "subdir1", "file3.txtt"]
+-- Nothing
+
+-- >>> traverseFileSystem root ["root", "subdir1", "file3.txt"]
+-- Just (File "file3.txt" "Content of file 3")
+
+-- >>> traverseFileSystem root ["root", "subdir2", "file3.txt"]
+-- Nothing
+-- >>> traverseFileSystem root ["root", "subdir1", "file3.txt", "file4.txt"]
+-- Nothing
+-- >>> traverseFileSystem root ["root", "subdir1", "subdir11"]
+-- Just (Directory "subdir11" [])
