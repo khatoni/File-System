@@ -1,4 +1,5 @@
 import System.IO (hFlush, stdout)
+import Data.Maybe ( fromMaybe )
 
 data FileSystemElement
     = File String String | Directory String [FileSystemElement]
@@ -6,7 +7,7 @@ data FileSystemElement
 
 
 currentDirectory :: [String]
-currentDirectory = ["root", "subdir1"]
+currentDirectory = ["root"]
 
 pwd :: [String] -> String
 pwd currentDirectory = concatMap (++ "/") (init currentDirectory) ++ last currentDirectory
@@ -26,7 +27,8 @@ isAbsolutePath path = head path == '/'
 
 createQueryPath :: String -> [String]
 createQueryPath path
-    | isAbsolutePath path = splitPathToTokens path
+    | path == "/"           = ["/"]
+    | isAbsolutePath path   = splitPathToTokens path
     | otherwise             = currentDirectory ++ splitPathToTokens path
 
 
@@ -73,8 +75,10 @@ traverseFileSystem f@(File name content) (current:rest)
     | otherwise                    = Nothing
 
 traverseFileSystem d@(Directory name children) (current:rest)
-    | name == current && null rest  = Just d
-    | otherwise                     = getChild (head rest) children >>= \child -> traverseFileSystem child rest
+    | name == "root" && current == "/"  = Just d
+    | name == current && null rest      = Just d
+    | otherwise                         = getChild (head rest) children >>= \child -> traverseFileSystem child rest
+
 
 root = Directory "root"
     [ File "file1.txt" "Content of file 1"
@@ -87,6 +91,9 @@ root = Directory "root"
     , Directory "subdir2" []
 
     ]
+
+-- >>> traverseFileSystem root ["/"]
+-- Just (Directory "root" [File "file1.txt" "Content of file 1",Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],Directory "subdir2" []])
 
 -- >>> traverseFileSystem root ["root", "file1.txt"]
 -- Just (File "file1.txt" "Content of file 1")
@@ -120,16 +127,20 @@ root = Directory "root"
 -- Just (Directory "subdir11" [])
 
 
-ls :: Maybe String -> Maybe [String]
-ls Nothing = getDirectoryContent (traverseFileSystem root currentDirectory)
-ls (Just path) = getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) []))
+ls :: Maybe String -> [String]
+ls Nothing = fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
+ls (Just path) = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
 -- >>> ls Nothing
--- Just ["file2.txt","file3.txt","subdir11"]
+-- ["file1.txt","subdir1","subdir2"]
 -- >>> ls (Just "..")
--- Just ["file1.txt","subdir1","subdir2"]
+-- Invalid path
+
+-- >>> ls (Just "/")
+-- ["file1.txt","subdir1","subdir2"]
 
 -- >>> ls (Just "/subdir1/subdir11")
--- Just ["file111.txt"]
+-- Prelude.head: empty list
+-- ["file111.txt"]
 
 
 splitCommandToTokens:: String -> [String]
@@ -142,12 +153,39 @@ splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens
 -- >>> splitCommandToTokens "cat file1.txt /subdir1/subdir2/file2.txt file3.txt > file4.txt"
 -- ["cat","file1.txt","/subdir1/subdir2/file2.txt","file3.txt",">","file4.txt"]
 
+-- >>> splitCommandToTokens "ls root/subdir1"
+-- ["ls","root/subdir1"]
+
+-- >>> ls (Just "/subdir1")
+-- ["file2.txt","file3.txt","subdir11"]
+
+-- >>> splitCommandToTokens "ls "
+
+executeLSCommand :: [String] -> [String]
+executeLSCommand commandTokens
+    | length commandTokens == 1    = ls Nothing
+    | otherwise                    = ls (Just (head (tail commandTokens)))
+
+printFolderContent :: [String] -> IO ()
+printFolderContent lsResult = do
+                            putStrLn (concatMap (++ " ") lsResult)
+                            hFlush stdout
+
+
 main :: IO ()
-main = commandExecutor root where
-    commandExecutor root = do
+main = commandExecutor root currentDirectory where
+    commandExecutor root currentDirectory = do
         putStr "$ "
         hFlush stdout
         command  <- getLine
         let commandTokens = splitCommandToTokens command
-        putStrLn $ head commandTokens
-        commandExecutor root
+        case head commandTokens of
+            "ls" -> do
+                    let lsResult = executeLSCommand commandTokens
+                    printFolderContent lsResult
+                    commandExecutor root currentDirectory
+            "cd" -> do
+                    putStrLn "TODO"
+            _    -> do
+                    putStrLn $ head commandTokens
+                    commandExecutor root currentDirectory
