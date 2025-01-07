@@ -56,6 +56,10 @@ getName :: FileSystemElement -> String
 getName (File name _) = name
 getName (Directory name _) = name
 
+getFileContent :: FileSystemElement -> String
+getFileContent (File _ content) = content
+getFileContent (Directory _ _)  = "Directory"
+
 getDirectoryContent :: Maybe FileSystemElement -> Maybe [String]
 getDirectoryContent Nothing = Nothing
 getDirectoryContent (Just (File name content)) = Nothing
@@ -127,10 +131,20 @@ root = Directory "root"
 -- >>> traverseFileSystem root ["root", "subdir1", "subdir11"]
 -- Just (Directory "subdir11" [])
 
+addFile :: FileSystemElement -> [String] -> FileSystemElement -> FileSystemElement
+addFile f@(File name content) (current:rest) fileToCreate = f
+addFile d@(Directory name children) (current:rest) fileToCreate
+    | name == current && length rest == 1  = Directory name (fileToCreate : children)
+    | otherwise                            = do
+        let toUpdate = getChild (head rest) children
+        case toUpdate of
+            Nothing -> d
+            Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (/= fileElement) children)
 
-ls :: Maybe String -> [String]
-ls Nothing = fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
-ls (Just path) = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
+
+ls :: Maybe String -> FileSystemElement -> [String]
+ls Nothing root = fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
+ls (Just path) root = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
 -- >>> ls Nothing
 -- ["file1.txt","subdir1","subdir2"]
 -- >>> ls (Just "..")
@@ -141,9 +155,28 @@ cd path = case traverseFileSystem root (parsePath (createQueryPath path) []) of
     Nothing              -> currentDirectory
     Just (File _ _)      -> currentDirectory
     Just (Directory _ _) -> parsePath (createQueryPath path) []
-    
+
 -- >>> cd "/subdir1/subdir11"
 -- ["","subdir1","subdir11"]
+
+readFileContent :: String -> FileSystemElement -> String
+readFileContent filePath root = case traverseFileSystem root (parsePath (createQueryPath filePath) []) of
+    Nothing              -> "No such file"
+    Just f@(File _ _)    -> getFileContent f
+    Just (Directory _ _) -> "Cannot cat dir"
+
+cat :: [String] -> FileSystemElement -> IO ()
+cat [] root = do
+    line <- getLine
+    putStrLn line
+cat (path:paths) root
+    | null paths = do
+                putStrLn (readFileContent path root)
+                return ()
+    | otherwise  = do
+                putStrLn (readFileContent path root)
+                cat paths root
+
 
 splitCommandToTokens:: String -> [String]
 splitCommandToTokens [] = []
@@ -152,22 +185,52 @@ splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens
 -- >>> splitCommandToTokens "cat file1.txt /subdir1/subdir2/file2.txt file3.txt > file4.txt"
 -- ["cat","file1.txt","/subdir1/subdir2/file2.txt","file3.txt",">","file4.txt"]
 
+fileContentAccumulator :: FileSystemElement -> [String] -> String ->String
+fileContentAccumulator root [] result = result
+fileContentAccumulator root (path:paths) content = fileContentAccumulator root paths (content ++ "\n" ++ readFileContent path root)
 
-executeLSCommand :: [String] -> [String]
-executeLSCommand commandTokens
-    | length commandTokens == 1    = ls Nothing
-    | otherwise                    = ls (Just (head (tail commandTokens)))
+
+catWithFile :: FileSystemElement -> [String] -> String -> FileSystemElement
+catWithFile root filesToRead fileToWrite = do
+    let filePath = parsePath (createQueryPath fileToWrite) []
+    let file = traverseFileSystem root filePath
+    let text = fileContentAccumulator root filesToRead ""
+    case file of
+        Nothing -> addFile root filePath (File fileToWrite text)
+        Just (File _ content) -> addFile root filePath (File fileToWrite text)
+        Just (Directory _ _) -> root
+
+-- >>> catWithFile ["file1.txt"] "file2.txt"
+-- Directory "root" [File "file2.txt" "Content of file 1",File "file1.txt" "Content of file 1",Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],Directory "subdir2" []]
+
+executeLSCommand :: [String] -> FileSystemElement -> [String]
+executeLSCommand commandTokens root
+    | length commandTokens == 1    = ls Nothing root
+    | otherwise                    = ls (Just (head (tail commandTokens))) root
 
 executeCDCommand :: [String] -> [String]
 executeCDCommand commandTokens
     | length commandTokens == 2    = cd (head (tail commandTokens))
     | otherwise                    = currentDirectory
 
+getReadFiles :: [String] -> [String]
+getReadFiles commandParams= takeWhile (/= ">") (tail commandParams)
+
+getFileToWrite:: [String] -> String
+getFileToWrite commandParams = head (tail (dropWhile (/= ">") commandParams))
+
+executeCatCommand commandTokens root
+    | length commandTokens == 1     = cat [] root
+    | ">" `notElem` commandTokens   = cat (tail commandTokens) root
+-- >>> getFileToWrite ["cat", "/f1", "/f2", ">", "file4", "file5", "file6"]
+-- "file4"
+
 printFolderContent :: [String] -> IO ()
 printFolderContent lsResult = do
                             putStrLn (concatMap (++ " ") lsResult)
                             hFlush stdout
-
+-- >>> catWithFile (getReadFiles ["cat", "file1.txt", ">", "file2.txt"]) (getFileToWrite ["cat", "file1.txt", ">", "file2.txt"])
+-- Directory "root" [File "file2.txt" "Content of file 1",File "file1.txt" "Content of file 1",Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],Directory "subdir2" []]
 
 main :: IO ()
 main = commandExecutor root currentDirectory where
@@ -178,15 +241,22 @@ main = commandExecutor root currentDirectory where
         let commandTokens = splitCommandToTokens command
         case head commandTokens of
             "ls" -> do
-                    let lsResult = executeLSCommand commandTokens
+                    let lsResult = executeLSCommand commandTokens root
                     printFolderContent lsResult
                     commandExecutor root currentDirectory
             "cd" -> do
                     let cdResult = executeCDCommand commandTokens
                     commandExecutor root cdResult
-            "pwd"-> do
+            "pwd" -> do
                     putStrLn (pwd currentDirectory)
                     commandExecutor root currentDirectory
+            "cat" -> do
+                    if ">" `elem` commandTokens then do
+                        let updatedDirectory = catWithFile root (getReadFiles commandTokens) (getFileToWrite commandTokens)
+                        commandExecutor updatedDirectory currentDirectory
+                    else do
+                        executeCatCommand commandTokens root
+                        commandExecutor root currentDirectory
             _    -> do
                     putStrLn $ head commandTokens
                     commandExecutor root currentDirectory
