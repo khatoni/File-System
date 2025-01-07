@@ -31,7 +31,7 @@ createQueryPath path
     | isAbsolutePath path   = splitPathToTokens path
     | otherwise             = currentDirectory ++ splitPathToTokens path
 
-
+-- FIX BUG
 parsePath :: [String] -> [String] -> [String]
 parsePath [] tmp = tmp
 parsePath path tmp
@@ -80,6 +80,7 @@ traverseFileSystem d@(Directory name children) (current:rest)
     | otherwise                         = getChild (head rest) children >>= \child -> traverseFileSystem child rest
 
 
+root :: FileSystemElement
 root = Directory "root"
     [ File "file1.txt" "Content of file 1"
     , Directory "subdir1"
@@ -135,36 +136,32 @@ ls (Just path) = fromMaybe [] (getDirectoryContent (traverseFileSystem root (par
 -- >>> ls (Just "..")
 -- Invalid path
 
--- >>> ls (Just "/")
--- ["file1.txt","subdir1","subdir2"]
-
--- >>> ls (Just "/subdir1/subdir11")
--- Prelude.head: empty list
--- ["file111.txt"]
-
+cd :: String -> [String]
+cd path = case traverseFileSystem root (parsePath (createQueryPath path) []) of
+    Nothing              -> currentDirectory
+    Just (File _ _)      -> currentDirectory
+    Just (Directory _ _) -> parsePath (createQueryPath path) []
+    
+-- >>> cd "/subdir1/subdir11"
+-- ["","subdir1","subdir11"]
 
 splitCommandToTokens:: String -> [String]
 splitCommandToTokens [] = []
 splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens ( dropWhile (== ' ') (dropWhile (/= ' ') command))
 
--- >>> splitCommandToTokens "ls                  ../second/third/.."
--- ["ls","../second/third/.."]
-
 -- >>> splitCommandToTokens "cat file1.txt /subdir1/subdir2/file2.txt file3.txt > file4.txt"
 -- ["cat","file1.txt","/subdir1/subdir2/file2.txt","file3.txt",">","file4.txt"]
 
--- >>> splitCommandToTokens "ls root/subdir1"
--- ["ls","root/subdir1"]
-
--- >>> ls (Just "/subdir1")
--- ["file2.txt","file3.txt","subdir11"]
-
--- >>> splitCommandToTokens "ls "
 
 executeLSCommand :: [String] -> [String]
 executeLSCommand commandTokens
     | length commandTokens == 1    = ls Nothing
     | otherwise                    = ls (Just (head (tail commandTokens)))
+
+executeCDCommand :: [String] -> [String]
+executeCDCommand commandTokens
+    | length commandTokens == 2    = cd (head (tail commandTokens))
+    | otherwise                    = currentDirectory
 
 printFolderContent :: [String] -> IO ()
 printFolderContent lsResult = do
@@ -185,7 +182,11 @@ main = commandExecutor root currentDirectory where
                     printFolderContent lsResult
                     commandExecutor root currentDirectory
             "cd" -> do
-                    putStrLn "TODO"
+                    let cdResult = executeCDCommand commandTokens
+                    commandExecutor root cdResult
+            "pwd"-> do
+                    putStrLn (pwd currentDirectory)
+                    commandExecutor root currentDirectory
             _    -> do
                     putStrLn $ head commandTokens
                     commandExecutor root currentDirectory
