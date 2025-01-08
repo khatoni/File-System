@@ -22,3 +22,6 @@ parseFilePath currentDirectory filePath = parsePath (createQueryPath currentDire
         | otherwise                            = parsePath (tail path)  (tmp ++ [head path])
 
 
+splitCommandToTokens:: String -> [String]
+splitCommandToTokens [] = []
+splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens ( dropWhile (== ' ') (dropWhile (/= ' ') command))

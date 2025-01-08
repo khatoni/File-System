@@ -15,9 +15,10 @@ getFileContent :: FileSystemElement -> String
 getFileContent ( File _ content ) = content
 getFileContent ( Directory _ _ )  = ""
 
-getDirectoryContent :: FileSystemElement -> [String]
-getDirectoryContent ( File name content )       = []
-getDirectoryContent ( Directory name children ) = map getName children
+getDirectoryContent :: Maybe FileSystemElement -> [String]
+getDirectoryContent Nothing                          = []
+getDirectoryContent (Just (File name content))       = []
+getDirectoryContent (Just (Directory name children)) = map getName children
 
 getChild :: String -> [FileSystemElement] -> Maybe FileSystemElement
 getChild _ [] = Nothing
@@ -46,6 +47,24 @@ addFile d@(Directory name children) (current:rest) fileToCreate
             Nothing -> d
             Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (/= fileElement) children)
 
+rm :: FileSystemElement -> [String] -> FileSystemElement
+rm f@(File name content) (current:rest) = f
+rm file [] = file
+rm d@(Directory name children) ["/"] = d
+rm d@(Directory name children) (current:rest)
+    | name == current && null rest              = d
+    | name == current && length rest == 1       = do
+        let child = getChild (head rest) children
+        case child of
+            Nothing -> d
+            Just (File filename _)      -> Directory name (filter (\x -> getName x /= filename) children)
+            Just (Directory dirName []) -> Directory name (filter (\x -> getName x /= dirName) children)
+            Just (Directory _ _)        -> d
+    | otherwise                             = do
+        let toUpdate = getChild (head rest) children
+        case toUpdate of
+            Nothing -> d
+            Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x (tail rest) else x) children)
 
 mkdir :: FileSystemElement -> [String] -> String -> FileSystemElement
 mkdir root currentDirectory folderName = addFile root path (Directory (last path) []) where
@@ -55,20 +74,36 @@ touch:: FileSystemElement -> [String] -> String -> FileSystemElement
 touch root currentDirectory fileName = addFile root path (File (last path) "") where
     path = parseFilePath currentDirectory fileName
 
-
-
-
 pwd :: [String] -> String
 pwd currentDirectory = let presentWorkingDirectory = concatMap (++ "/") (init currentDirectory) ++ last currentDirectory in
     if presentWorkingDirectory == "/" then "/" else tail presentWorkingDirectory
 
 cd :: FileSystemElement -> [String] -> String -> [String]
 cd root currentDirectory path = let parsedPath = parseFilePath currentDirectory path in 
-    case traverseFileSystem root (parseFilePath currentDirectory path) of
+    case traverseFileSystem root parsedPath of
     Nothing              -> currentDirectory
     Just (File _ _)      -> currentDirectory
     Just (Directory _ _) -> parsedPath
 
-ls :: Maybe String -> FileSystemElement -> [String] -> [String]
-ls Nothing root currentDirectory= fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
-ls (Just path) root _ = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
+ls :: FileSystemElement -> [String] -> String -> [String]
+ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirectory filePath in
+    getDirectoryContent (traverseFileSystem root parsedPath)
+
+cat :: FileSystemElement -> [String] -> [String] -> IO ()
+cat root _ [] = do
+    line <- getLine
+    putStrLn line
+cat root currentDirectory (path:paths)
+    | null paths = do
+                putStrLn (readFileContent root (parseFilePath currentDirectory path))
+                return ()
+    | otherwise  = do
+                putStrLn (readFileContent root (parseFilePath currentDirectory path))
+                cat root paths currentDirectory
+
+readFileContent :: FileSystemElement -> [String] -> String
+readFileContent root filePath = 
+    case traverseFileSystem root filePath of
+        Nothing              -> "No such file"
+        Just f@(File _ _)    -> getFileContent f
+        Just (Directory _ _) -> "Cannot cat dir"

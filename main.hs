@@ -1,12 +1,10 @@
 import System.IO (hFlush, stdout)
 import Data.Maybe ( fromMaybe )
 import FileSystem
+import HelperFunctions
 
 currentDirectory :: [String]
 currentDirectory = ["/", "pesho", "gosho"]
-
--- >>> pwd currentDirectory
--- "/pesho/gosho"
 
 root :: FileSystemElement
 root = Directory "/"
@@ -21,76 +19,38 @@ root = Directory "/"
 
     ]
 
-cp :: FileSystemElement -> String -> String -> Maybe FileSystemElement
-cp root filenameToCopy filenameToCreate =
-    let filePath = parsePath (createQueryPath filenameToCopy) [] in
-        traverseFileSystem root filePath >>= 
-            (\file -> Just (addFile root filePath (File (getName file) (getFileContent file))))
+--cp :: FileSystemElement -> String -> String -> Maybe FileSystemElement
+--cp root filenameToCopy filenameToCreate =
+--  let filePath = parsePath (createQueryPath filenameToCopy) [] in
+--        traverseFileSystem root filePath >>= 
+--          (\file -> Just (addFile root filePath (File (getName file) (getFileContent file))))
 
 
-rm :: FileSystemElement -> [String] -> FileSystemElement
-rm f@(File name content) (current:rest) = f
-rm file [] = file
-rm d@(Directory name children) ["/"] = d
-rm d@(Directory name children) (current:rest)
-    | name == current && null rest              = d
-    | name == current && length rest == 1       = do
-        let child = getChild (head rest) children
-        case child of
-            Nothing -> d
-            Just (File filename _)      -> Directory name (filter (\x -> getName x /= filename) children)
-            Just (Directory dirName []) -> Directory name (filter (\x -> getName x /= dirName) children)
-            Just (Directory _ _)        -> d
-    | otherwise                             = do
-        let toUpdate = getChild (head rest) children
-        case toUpdate of
-            Nothing -> d
-            Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x (tail rest) else x) children)
-
--- >>> rm root ["root","file1.txt"]
--- Directory "root" [Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],Directory "subdir2" []]
-
-
+-- >>> rm root ["/","file1.txt"]
 
 
 
 -- >>> mkdir root "subdir1/testing"
 -- Directory "root" [Directory "subdir1" [Directory "testing" [],File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],File "file1.txt" "Content of file 1",Directory "subdir2" []]
 
-ls :: Maybe String -> FileSystemElement -> [String] -> [String]
-ls Nothing root currentDirectory= fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
-ls (Just path) root _ = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
--- >>> ls Nothing
+--ls :: Maybe String -> FileSystemElement -> [String] -> [String]
+--ls Nothing root currentDirectory= fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
+--ls (Just path) root _ = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
+-- >>> ls root ["/"] "/"
 -- ["file1.txt","subdir1","subdir2"]
+
 -- >>> ls (Just "..")
--- Invalid path
+-- Couldn't match expected type `FileSystemElement'
+--             with actual type `Maybe String'
+-- In the first argument of `ls', namely `(Just "..")'
+-- In the expression: ls (Just "..")
+-- In an equation for `it_a1x9y': it_a1x9y = ls (Just "..")
 
-readFileContent :: String -> FileSystemElement -> String
-readFileContent filePath root = case traverseFileSystem root (parsePath (createQueryPath filePath) []) of
-    Nothing              -> "No such file"
-    Just f@(File _ _)    -> getFileContent f
-    Just (Directory _ _) -> "Cannot cat dir"
-
-cat :: [String] -> FileSystemElement -> IO ()
-cat [] root = do
-    line <- getLine
-    putStrLn line
-cat (path:paths) root
-    | null paths = do
-                putStrLn (readFileContent path root)
-                return ()
-    | otherwise  = do
-                putStrLn (readFileContent path root)
-                cat paths root
-
-
-splitCommandToTokens:: String -> [String]
-splitCommandToTokens [] = []
-splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens ( dropWhile (== ' ') (dropWhile (/= ' ') command))
 
 -- >>> splitCommandToTokens "cat file1.txt /subdir1/subdir2/file2.txt file3.txt > file4.txt"
 -- ["cat","file1.txt","/subdir1/subdir2/file2.txt","file3.txt",">","file4.txt"]
 
+-- TODO WITH fold
 fileContentAccumulator :: FileSystemElement -> [String] -> String ->String
 fileContentAccumulator root [] result = result
 fileContentAccumulator root (path:paths) content = fileContentAccumulator root paths (content ++ "\n" ++ readFileContent path root)
@@ -98,7 +58,7 @@ fileContentAccumulator root (path:paths) content = fileContentAccumulator root p
 
 catWithFile :: FileSystemElement -> [String] -> String -> FileSystemElement
 catWithFile root filesToRead fileToWrite = do
-    let filePath = parsePath (createQueryPath fileToWrite) []
+    let filePath = parseFilePath fileToWrite
     let file = traverseFileSystem root filePath
     let text = fileContentAccumulator root filesToRead ""
     case file of
@@ -111,8 +71,8 @@ catWithFile root filesToRead fileToWrite = do
 
 executeLSCommand :: [String] -> FileSystemElement -> [String] -> [String]
 executeLSCommand commandTokens root currentDirectory
-    | length commandTokens == 1    = ls Nothing root currentDirectory
-    | otherwise                    = ls (Just (head (tail commandTokens))) root currentDirectory
+    | length commandTokens == 1    = ls root currentDirectory ""
+    | otherwise                    = ls root currentDirectory (head (tail commandTokens))
 
 executeCDCommand :: [String] -> [String]
 executeCDCommand commandTokens
