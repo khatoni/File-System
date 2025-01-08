@@ -3,15 +3,13 @@ import Data.Maybe ( fromMaybe )
 import FileSystem
 
 currentDirectory :: [String]
-currentDirectory = ["root"]
+currentDirectory = ["/", "pesho", "gosho"]
 
-pwd :: [String] -> String
-pwd currentDirectory = concatMap (++ "/") (init currentDirectory) ++ last currentDirectory
 -- >>> pwd currentDirectory
--- "root/first/second/third"
+-- "/pesho/gosho"
 
 root :: FileSystemElement
-root = Directory "root"
+root = Directory "/"
     [ File "file1.txt" "Content of file 1"
     , Directory "subdir1"
         [ File "file2.txt" "Content of file 2"
@@ -22,59 +20,6 @@ root = Directory "root"
     , Directory "subdir2" []
 
     ]
-
--- >>> traverseFileSystem root ["/"]
--- Prelude.head: empty list
-
--- >>> traverseFileSystem root ["root", "file1.txt"]
--- Just (File "file1.txt" "Content of file 1")
-
--- >>> traverseFileSystem root ["root", "file1.txt", "file2.txt"]
--- Nothing
-
--- >>> traverseFileSystem root ["root", "subdir2"]
--- Just (Directory "subdir2" [])
-
--- >>> traverseFileSystem root ["root", "subdir1"]
--- Just (Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3"])
-
--- >>> traverseFileSystem root ["root", "subdir3"]
--- Nothing
-
--- >>> traverseFileSystem root ["root", "subdir2", "subdir3"]
--- Nothing
-
--- >>> traverseFileSystem root ["root", "subdir1", "file3.txtt"]
--- Nothing
-
--- >>> traverseFileSystem root ["root", "subdir1", "file3.txt"]
--- Just (File "file3.txt" "Content of file 3")
-
--- >>> traverseFileSystem root ["root", "subdir2", "file3.txt"]
--- Nothing
--- >>> traverseFileSystem root ["root", "subdir1", "file3.txt", "file4.txt"]
--- Nothing
--- >>> traverseFileSystem root ["root", "subdir1", "subdir11"]
--- Just (Directory "subdir11" [])
-
-addFile :: FileSystemElement -> [String] -> FileSystemElement -> FileSystemElement
-addFile f@(File name content) (current:rest) fileToCreate = f
-addFile d@(Directory name children) (current:rest) fileToCreate
-    | name == current && length rest == 1  = Directory name (fileToCreate : children)
-    | otherwise                            = do
-        let toUpdate = getChild (head rest) children
-        case toUpdate of
-            Nothing -> d
-            Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (/= fileElement) children)
-
-
-mkdir :: FileSystemElement -> String -> FileSystemElement
-mkdir root folderName = addFile root path (Directory (last path) []) where
-    path = parsePath (createQueryPath folderName) []
-
-touch:: FileSystemElement -> String -> FileSystemElement
-touch root filePath = addFile root path (File (last path) "") where
-    path = parsePath (createQueryPath filePath) []
 
 cp :: FileSystemElement -> String -> String -> Maybe FileSystemElement
 cp root filenameToCopy filenameToCreate =
@@ -119,15 +64,6 @@ ls (Just path) root _ = fromMaybe [] (getDirectoryContent (traverseFileSystem ro
 -- ["file1.txt","subdir1","subdir2"]
 -- >>> ls (Just "..")
 -- Invalid path
-
-cd :: String -> [String]
-cd path = case traverseFileSystem root (parsePath (createQueryPath path) []) of
-    Nothing              -> currentDirectory
-    Just (File _ _)      -> currentDirectory
-    Just (Directory _ _) -> parsePath (createQueryPath path) []
-
--- >>> cd "/subdir1/subdir11"
--- ["","subdir1","subdir11"]
 
 readFileContent :: String -> FileSystemElement -> String
 readFileContent filePath root = case traverseFileSystem root (parsePath (createQueryPath filePath) []) of
