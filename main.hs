@@ -142,6 +142,40 @@ addFile d@(Directory name children) (current:rest) fileToCreate
             Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (/= fileElement) children)
 
 
+mkdir :: FileSystemElement -> String -> FileSystemElement
+mkdir root folderName = addFile root path (Directory (last path) []) where
+    path = parsePath (createQueryPath folderName) []
+
+
+rm :: FileSystemElement -> [String] -> FileSystemElement
+rm f@(File name content) (current:rest) = f
+rm file [] = file
+rm d@(Directory name children) ["/"] = d
+rm d@(Directory name children) (current:rest)
+    | name == current && null rest              = d
+    | name == current && length rest == 1       = do
+        let child = getChild (head rest) children
+        case child of
+            Nothing -> d
+            Just (File filename _)      -> Directory name (filter (\x -> getName x /= filename) children)
+            Just (Directory dirName []) -> Directory name (filter (\x -> getName x /= dirName) children)
+            Just (Directory _ _)        -> d
+    | otherwise                             = do
+        let toUpdate = getChild (head rest) children
+        case toUpdate of
+            Nothing -> d
+            Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x (tail rest) else x) children)
+
+-- >>> rm root ["root","file1.txt"]
+-- Directory "root" [Directory "subdir1" [File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],Directory "subdir2" []]
+
+
+
+
+
+-- >>> mkdir root "subdir1/testing"
+-- Directory "root" [Directory "subdir1" [Directory "testing" [],File "file2.txt" "Content of file 2",File "file3.txt" "Content of file 3",Directory "subdir11" [File "file111.txt" "Content of file 1111"]],File "file1.txt" "Content of file 1",Directory "subdir2" []]
+
 ls :: Maybe String -> FileSystemElement -> [String]
 ls Nothing root = fromMaybe [] (getDirectoryContent (traverseFileSystem root currentDirectory))
 ls (Just path) root = fromMaybe [] (getDirectoryContent (traverseFileSystem root (parsePath (createQueryPath path) [])))
@@ -213,6 +247,7 @@ executeCDCommand commandTokens
     | length commandTokens == 2    = cd (head (tail commandTokens))
     | otherwise                    = currentDirectory
 
+
 getReadFiles :: [String] -> [String]
 getReadFiles commandParams= takeWhile (/= ">") (tail commandParams)
 
@@ -257,6 +292,12 @@ main = commandExecutor root currentDirectory where
                     else do
                         executeCatCommand commandTokens root
                         commandExecutor root currentDirectory
+            "rm" -> do
+                    let rmResult = rm root (parsePath (createQueryPath (last commandTokens)) [])
+                    commandExecutor rmResult currentDirectory
+            "mkdir" -> commandExecutor (mkdir root (last commandTokens)) currentDirectory 
             _    -> do
                     putStrLn $ head commandTokens
                     commandExecutor root currentDirectory
+
+
