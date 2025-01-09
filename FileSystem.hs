@@ -102,27 +102,25 @@ ls :: FileSystemElement -> [String] -> String -> [String]
 ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirectory filePath in
     getDirectoryContent (traverseFileSystem root parsedPath)
 
-cat :: FileSystemElement -> [String] -> [String] -> IO ()
+cat :: FileSystemElement -> [String] -> [String] -> IO String
 cat root _ [] = do
-    line <- readFromConsole
-    putStrLn line
+    readFromConsole
+
 cat root currentDirectory (path:paths)
     | null paths = do
-                putStrLn (readFileContent root (parseFilePath currentDirectory path))
-                return ()
+                return (readFileContent root (parseFilePath currentDirectory path))
     | otherwise  = do
                 putStrLn (readFileContent root (parseFilePath currentDirectory path))
-                cat root paths currentDirectory
+                cat root currentDirectory paths
 
-catWithFile :: FileSystemElement -> [String] -> [String] -> String -> FileSystemElement
-catWithFile root currentDirectory filesToRead fileToWrite = do
+catWithFile :: FileSystemElement -> [String] -> String -> String -> FileSystemElement
+catWithFile root currentDirectory text fileToWrite = 
     let filePath = parseFilePath currentDirectory fileToWrite
-    let file = traverseFileSystem root filePath
-    let text = fileContentAccumulator root currentDirectory filesToRead
-    case file of
-        Nothing -> addFile root filePath (File fileToWrite text)
-        Just (File _ content) -> addFile root filePath (File fileToWrite text)
-        Just (Directory _ _) -> root
+        file = traverseFileSystem root filePath in 
+            case file of
+            Nothing -> addFile root filePath (File (last filePath) text)
+            Just (File _ _) -> addFile root filePath (File (last filePath) text)
+            Just (Directory _ _) -> root
 
 fileContentAccumulator :: FileSystemElement -> [String] -> [String] -> String
 fileContentAccumulator root currentDirectory = foldl (\content path -> content ++ readFileContent root (parseFilePath currentDirectory path) ++ "\n") ""

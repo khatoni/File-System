@@ -29,10 +29,10 @@ executeCDCommand root currentDirectory commandTokens
     | length commandTokens == 2    = cd root currentDirectory (head (tail commandTokens))
     | otherwise                    = currentDirectory
 
-executeCatCommand :: FileSystemElement -> [String] -> [String] -> IO ()
-executeCatCommand root currentDirectory commandTokens
-    | length commandTokens == 1     = cat root currentDirectory []
-    | ">" `notElem` commandTokens   = cat root currentDirectory (tail commandTokens)
+--executeCatCommand :: FileSystemElement -> [String] -> [String] -> IO ()
+--executeCatCommand root currentDirectory commandTokens
+--    | length commandTokens == 1     = cat root currentDirectory []
+--    | ">" `notElem` commandTokens   = cat root currentDirectory (tail commandTokens)
 
 executeCPCommand :: FileSystemElement -> [String] -> [String] -> FileSystemElement
 executeCPCommand root currentDirectory commandTokens = cp root currentDirectory (commandTokens !! 1) (commandTokens !! 2)
@@ -62,10 +62,19 @@ main = commandExecutor root currentDirectory where
                     commandExecutor root currentDirectory
             "cat" -> do
                     if ">" `elem` commandTokens then do
-                        let updatedDirectory = catWithFile root currentDirectory (getFilesToRead commandTokens) (getFileToWrite commandTokens)
-                        commandExecutor updatedDirectory currentDirectory
+                        let readFiles = getFilesToRead commandTokens
+                        let writeFile = getFileToWrite commandTokens
+                        if null readFiles then do
+                            text <- readFromConsole
+                            let updatedDirectory = catWithFile root currentDirectory text writeFile
+                            commandExecutor updatedDirectory currentDirectory
+                        else  do
+                            let fileText = fileContentAccumulator root currentDirectory readFiles
+                            let updatedDirectory = catWithFile root currentDirectory fileText writeFile
+                            commandExecutor updatedDirectory currentDirectory
                     else do
-                        executeCatCommand root currentDirectory commandTokens
+                        text <-cat root currentDirectory (tail commandTokens)
+                        putStrLn text
                         commandExecutor root currentDirectory
             "rm" -> do
                     let rmResult = rm root (parseFilePath currentDirectory (last commandTokens))
