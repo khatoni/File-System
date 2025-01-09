@@ -31,3 +31,9 @@ getFilesToRead commandParams= takeWhile (/= ">") (tail commandParams)
 
 getFileToWrite:: [String] -> String
 getFileToWrite commandParams = head (tail (dropWhile (/= ">") commandParams))
+
+readFromConsole:: IO String
+readFromConsole = consoleAccumulator "" where 
+                consoleAccumulator result = do
+                    line <- getLine
+                    if line == "." then return result else consoleAccumulator (result ++ "\n" ++ line)

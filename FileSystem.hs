@@ -88,11 +88,15 @@ cd root currentDirectory path = let parsedPath = parseFilePath currentDirectory 
 cp :: FileSystemElement -> [String] -> String -> String -> FileSystemElement
 cp root currentDirectory filenameToCopy filenameToCreate =
     let filePathToCopy   = parseFilePath currentDirectory filenameToCopy
-        filePathToCreate = parseFilePath currentDirectory filenameToCreate
+        filePathToCreate = parseFilePath currentDirectory filenameToCreate ++ [last filePathToCopy]
         updatedRoot = traverseFileSystem root filePathToCopy >>=
             (Just . addFile root filePathToCreate) in
                 fromMaybe root updatedRoot
 
+mv :: FileSystemElement -> [String] -> String -> String -> FileSystemElement
+mv root currentDirectory filenameToMove filenameToCreate =
+    let copiedRoot = cp root currentDirectory filenameToMove filenameToCreate in
+        if root /= copiedRoot then rm copiedRoot (parseFilePath currentDirectory filenameToMove) else root
 
 ls :: FileSystemElement -> [String] -> String -> [String]
 ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirectory filePath in
@@ -100,7 +104,7 @@ ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirect
 
 cat :: FileSystemElement -> [String] -> [String] -> IO ()
 cat root _ [] = do
-    line <- getLine
+    line <- readFromConsole
     putStrLn line
 cat root currentDirectory (path:paths)
     | null paths = do
@@ -122,7 +126,6 @@ catWithFile root currentDirectory filesToRead fileToWrite = do
 
 fileContentAccumulator :: FileSystemElement -> [String] -> [String] -> String
 fileContentAccumulator root currentDirectory = foldl (\content path -> content ++ readFileContent root (parseFilePath currentDirectory path) ++ "\n") ""
-
 
 readFileContent :: FileSystemElement -> [String] -> String
 readFileContent root filePath =
