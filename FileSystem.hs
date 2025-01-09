@@ -102,6 +102,24 @@ ls :: FileSystemElement -> [String] -> String -> [String]
 ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirectory filePath in
     getDirectoryContent (traverseFileSystem root parsedPath)
 
+headFS :: FileSystemElement -> [String] -> String -> Int -> String
+headFS root currentDirectory filename n = 
+    let parsedFilePath = parseFilePath currentDirectory filename 
+        foundFile = traverseFileSystem root parsedFilePath in 
+        case foundFile of
+            Nothing -> []
+            Just (Directory _ _) -> []
+            Just (File _ content) -> getFirstNLines content n
+
+tailFS :: FileSystemElement -> [String] -> String -> Int -> String
+tailFS root currentDirectory filename n = 
+    let parsedFilePath = parseFilePath currentDirectory filename 
+        foundFile = traverseFileSystem root parsedFilePath in 
+        case foundFile of
+            Nothing -> []
+            Just (Directory _ _) -> []
+            Just (File _ content) -> getLastNLines content n
+
 cat :: FileSystemElement -> [String] -> [String] -> IO String
 cat root _ [] = do
     readFromConsole

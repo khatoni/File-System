@@ -81,8 +81,14 @@ main = commandExecutor root currentDirectory where
                     commandExecutor rmResult currentDirectory
             "mkdir" -> commandExecutor (mkdir root currentDirectory (last commandTokens)) currentDirectory
             "touch" -> commandExecutor  (touch root currentDirectory (last commandTokens)) currentDirectory
-            "head" -> commandExecutor root currentDirectory
-            "tail" -> commandExecutor root currentDirectory
+            "head" -> do
+                    let text = headFS root currentDirectory (commandTokens !! 1) (read (commandTokens !! 2))
+                    putStrLn text
+                    commandExecutor root currentDirectory
+            "tail" -> do
+                    let text = tailFS root currentDirectory (commandTokens !! 1) (read (commandTokens !! 2))
+                    putStrLn text
+                    commandExecutor root currentDirectory
             "cp"   -> do
                     let cpResult = executeCPCommand root currentDirectory commandTokens
                     commandExecutor cpResult currentDirectory
