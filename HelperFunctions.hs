@@ -1,7 +1,7 @@
 module HelperFunctions where
 
 isAbsolutePath :: String -> Bool
-isAbsolutePath path = head path == '/'
+isAbsolutePath path = not (null path) && head path == '/'
 
 createQueryPath :: [String] -> String -> [String]
 createQueryPath currentDirectory path
@@ -21,7 +21,13 @@ parseFilePath currentDirectory filePath = parsePath (createQueryPath currentDire
         | head path == ".."                    = parsePath (tail path) (init tmp)
         | otherwise                            = parsePath (tail path)  (tmp ++ [head path])
 
-
 splitCommandToTokens:: String -> [String]
 splitCommandToTokens [] = []
 splitCommandToTokens command = takeWhile (/= ' ') command : splitCommandToTokens ( dropWhile (== ' ') (dropWhile (/= ' ') command))
+
+
+getFilesToRead :: [String] -> [String]
+getFilesToRead commandParams= takeWhile (/= ">") (tail commandParams)
+
+getFileToWrite:: [String] -> String
+getFileToWrite commandParams = head (tail (dropWhile (/= ">") commandParams))

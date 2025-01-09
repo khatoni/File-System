@@ -1,5 +1,4 @@
 module FileSystem where
-
 import HelperFunctions
 import Data.Maybe ( fromMaybe )
 
@@ -40,12 +39,13 @@ traverseFileSystem d@(Directory name children) (current:rest)
 addFile :: FileSystemElement -> [String] -> FileSystemElement -> FileSystemElement
 addFile f@(File name content) (current:rest) fileToCreate = f
 addFile d@(Directory name children) (current:rest) fileToCreate
+    | name == current && null rest         = Directory name (fileToCreate : children)
     | name == current && length rest == 1  = Directory name (fileToCreate : children)
     | otherwise                            = do
         let toUpdate = getChild (head rest) children
         case toUpdate of
             Nothing -> d
-            Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (/= fileElement) children)
+            Just fileElement -> Directory name (addFile fileElement rest fileToCreate : filter (\child -> getName child /= getName fileElement) children)
 
 rm :: FileSystemElement -> [String] -> FileSystemElement
 rm f@(File name content) (current:rest) = f
@@ -79,11 +79,20 @@ pwd currentDirectory = let presentWorkingDirectory = concatMap (++ "/") (init cu
     if presentWorkingDirectory == "/" then "/" else tail presentWorkingDirectory
 
 cd :: FileSystemElement -> [String] -> String -> [String]
-cd root currentDirectory path = let parsedPath = parseFilePath currentDirectory path in 
+cd root currentDirectory path = let parsedPath = parseFilePath currentDirectory path in
     case traverseFileSystem root parsedPath of
     Nothing              -> currentDirectory
     Just (File _ _)      -> currentDirectory
     Just (Directory _ _) -> parsedPath
+
+cp :: FileSystemElement -> [String] -> String -> String -> FileSystemElement
+cp root currentDirectory filenameToCopy filenameToCreate =
+    let filePathToCopy   = parseFilePath currentDirectory filenameToCopy
+        filePathToCreate = parseFilePath currentDirectory filenameToCreate
+        updatedRoot = traverseFileSystem root filePathToCopy >>=
+            (Just . addFile root filePathToCreate) in
+                fromMaybe root updatedRoot
+
 
 ls :: FileSystemElement -> [String] -> String -> [String]
 ls root currentDirectory filePath = let parsedPath = parseFilePath currentDirectory filePath in
@@ -101,8 +110,22 @@ cat root currentDirectory (path:paths)
                 putStrLn (readFileContent root (parseFilePath currentDirectory path))
                 cat root paths currentDirectory
 
+catWithFile :: FileSystemElement -> [String] -> [String] -> String -> FileSystemElement
+catWithFile root currentDirectory filesToRead fileToWrite = do
+    let filePath = parseFilePath currentDirectory fileToWrite
+    let file = traverseFileSystem root filePath
+    let text = fileContentAccumulator root currentDirectory filesToRead
+    case file of
+        Nothing -> addFile root filePath (File fileToWrite text)
+        Just (File _ content) -> addFile root filePath (File fileToWrite text)
+        Just (Directory _ _) -> root
+
+fileContentAccumulator :: FileSystemElement -> [String] -> [String] -> String
+fileContentAccumulator root currentDirectory = foldl (\content path -> content ++ readFileContent root (parseFilePath currentDirectory path) ++ "\n") ""
+
+
 readFileContent :: FileSystemElement -> [String] -> String
-readFileContent root filePath = 
+readFileContent root filePath =
     case traverseFileSystem root filePath of
         Nothing              -> "No such file"
         Just f@(File _ _)    -> getFileContent f
