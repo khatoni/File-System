@@ -39,8 +39,8 @@ traverseFileSystem d@(Directory name children) (current:rest)
 addFile :: FileSystemElement -> [String] -> FileSystemElement -> FileSystemElement
 addFile f@(File name content) (current:rest) fileToCreate = f
 addFile d@(Directory name children) (current:rest) fileToCreate
-    | name == current && null rest         = Directory name (fileToCreate : children)
-    | name == current && length rest == 1  = Directory name (fileToCreate : children)
+    | name == current && null rest         = Directory name (fileToCreate : filter (\child -> getName child /= getName fileToCreate) children)
+    | name == current && length rest == 1  = Directory name (fileToCreate : filter (\child -> getName child /= getName fileToCreate) children)
     | otherwise                            = do
         let toUpdate = getChild (head rest) children
         case toUpdate of
