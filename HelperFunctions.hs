@@ -36,7 +36,7 @@ readFromConsole :: IO String
 readFromConsole = consoleAccumulator "" where
                 consoleAccumulator result = do
                     line <- getLine
-                    if line == "." then return result else consoleAccumulator (result ++ "\n" ++ line)
+                    if line == "." then return (tail result) else consoleAccumulator (result ++ "\n" ++ line)
 
 getFirstNLines :: String -> Int -> String
 getFirstNLines [] _ = []
