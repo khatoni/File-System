@@ -22,6 +22,17 @@ executeCDCommand root currentDirectory commandTokens
 executeCPCommand :: FileSystemElement -> [String] -> [String] -> FileSystemElement
 executeCPCommand root currentDirectory commandTokens = cp root currentDirectory (commandTokens !! 1) (commandTokens !! 2)
 
+executeCatFromConsole :: FileSystemElement -> [String] -> [String] -> IO FileSystemElement
+executeCatFromConsole root currentDirectory commandTokens = 
+    let readFiles = getFilesToRead commandTokens
+        writeFile = getFileToWrite commandTokens in
+        if null readFiles then do
+            text <- readFromConsole
+            return (catWithFile root currentDirectory text writeFile)
+        else  do
+            let fileText = fileContentAccumulator root currentDirectory readFiles
+            return (catWithFile root currentDirectory fileText writeFile)
+
 printFolderContent :: [String] -> IO ()
 printFolderContent lsResult = do
                             putStrLn (concatMap (++ " ") lsResult)
@@ -47,16 +58,8 @@ main = commandExecutor root currentDirectory where
                     commandExecutor root currentDirectory
             "cat"-> do
                     if ">" `elem` commandTokens then do
-                        let readFiles = getFilesToRead commandTokens
-                        let writeFile = getFileToWrite commandTokens
-                        if null readFiles then do
-                            text <- readFromConsole
-                            let updatedDirectory = catWithFile root currentDirectory text writeFile
-                            commandExecutor updatedDirectory currentDirectory
-                        else  do
-                            let fileText = fileContentAccumulator root currentDirectory readFiles
-                            let updatedDirectory = catWithFile root currentDirectory fileText writeFile
-                            commandExecutor updatedDirectory currentDirectory
+                        updatedDirectory <- executeCatFromConsole root currentDirectory commandTokens
+                        commandExecutor updatedDirectory currentDirectory
                     else do
                         text <-cat root currentDirectory (tail commandTokens)
                         putStrLn text
