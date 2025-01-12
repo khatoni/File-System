@@ -31,7 +31,7 @@ executeCatFromConsole root currentDirectory commandTokens =
             return (catWithFile root currentDirectory text writeFile)
         else  do
             let fileText = fileContentAccumulator root currentDirectory readFiles
-            return (catWithFile root currentDirectory fileText writeFile)
+            return (catWithFile root currentDirectory (init fileText) writeFile)
 
 printFolderContent :: [String] -> IO ()
 printFolderContent lsResult = do

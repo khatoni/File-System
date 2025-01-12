@@ -1,6 +1,6 @@
 module FileSystem where
 import HelperFunctions
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, isNothing )
 
 data FileSystemElement
     = File String String | Directory String [FileSystemElement]
@@ -67,11 +67,15 @@ rm d@(Directory name children) (current:rest)
             Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x (tail rest) else x) children)
 
 mkdir :: FileSystemElement -> [String] -> String -> FileSystemElement
-mkdir root currentDirectory folderName = addFile root path (Directory (last path) []) where
+mkdir root currentDirectory folderName =  if isNothing(traverseFileSystem root path)
+    then addFile root path (Directory (last path) []) 
+    else root where
     path = parseFilePath currentDirectory folderName
 
 touch:: FileSystemElement -> [String] -> String -> FileSystemElement
-touch root currentDirectory fileName = addFile root path (File (last path) "") where
+touch root currentDirectory fileName = if isNothing(traverseFileSystem root path)
+    then addFile root path (File (last path) "") 
+    else root where
     path = parseFilePath currentDirectory fileName
 
 pwd :: [String] -> String

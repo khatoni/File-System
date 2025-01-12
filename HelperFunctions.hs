@@ -41,11 +41,13 @@ readFromConsole = consoleAccumulator "" where
 getFirstNLines :: String -> Int -> String
 getFirstNLines [] _ = []
 getFirstNLines _ 0 = []
-getFirstNLines text n = takeWhile (/= '\n') text ++ "\n" ++ getFirstNLines (tail $ dropWhile (/= '\n') text) (n-1)
+getFirstNLines text n = if countLines text <= n
+    then text
+    else takeWhile (/= '\n') text ++ "\n" ++ getFirstNLines (tail $ dropWhile (/= '\n') text) (n-1)
 
 countLines :: String -> Int
 countLines [] = 0
-countLines text = length $ filter (== '\n') text
+countLines text = 1 + length (filter (== '\n') text)
 
 
 dropFirstNLines :: String -> Int -> String
@@ -54,4 +56,6 @@ dropFirstNLines text 0 = text
 dropFirstNLines text n = dropFirstNLines (tail $ dropWhile (/= '\n') text) (n-1)
 
 getLastNLines :: String -> Int -> String
-getLastNLines text n = dropFirstNLines text (countLines text - n)
+getLastNLines text 0 = []
+getLastNLines text n = let linesCount = countLines text in
+    if linesCount <= n then text else dropFirstNLines text (linesCount - n)
