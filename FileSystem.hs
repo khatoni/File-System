@@ -60,11 +60,12 @@ rm d@(Directory name children) (current:rest)
             Just (File filename _)      -> Directory name (filter (\x -> getName x /= filename) children)
             Just (Directory dirName []) -> Directory name (filter (\x -> getName x /= dirName) children)
             Just (Directory _ _)        -> d
-    | otherwise                             = do
+    | name == current && length rest > 1    = do
         let toUpdate = getChild (head rest) children
         case toUpdate of
             Nothing -> d
-            Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x (tail rest) else x) children)
+            Just fileElement -> Directory name (map (\x-> if getName x == getName fileElement then rm x rest else x) children)
+    | otherwise = d
 
 mkdir :: FileSystemElement -> [String] -> String -> FileSystemElement
 mkdir root currentDirectory folderName =  if isNothing(traverseFileSystem root path)
